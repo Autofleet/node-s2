@@ -28,5 +28,12 @@
   "engines": {
     "node": "*"
   },
-  "license": "ISC"
+  "license": "ISC",
+  "binary": {
+    "module_name": "_s2",
+    "module_path": "./build/Release",
+    "host": "https://mapbox-node-binary.s3.amazonaws.com",
+    "remote_path": "./{name}/v{version}",
+    "package_name": "{node_abi}-{platform}-{arch}.tar.gz"
+  }
 }
