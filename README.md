@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/mapbox/node-s2.svg?branch=master)](https://travis-ci.org/mapbox/node-s2)
+This repo is forked from https://github.com/mapbox/node-s2 beacuse of this [issue](https://github.com/mapbox/node-s2/pull/91) that is now fixed.
 
 # node-s2
 
