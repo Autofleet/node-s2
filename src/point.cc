@@ -3,7 +3,7 @@
 #include "node_object_wrap.h"
 #include "v8.h"
 
-#include "s2.h"
+// #include "s2.h"
 #include "point.h"
 
 using namespace v8;

@@ -1,8 +1,30 @@
 // Copyright 2005 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+// Author: ericv@google.com (Eric Veach)
 
 #include "s1interval.h"
 
+#include <algorithm>
+#include <cfloat>
+#include <cmath>
+
 #include "base/logging.h"
+
+using std::fabs;
+using std::max;
 
 S1Interval S1Interval::FromPoint(double p) {
   if (p == -M_PI) p = M_PI;
@@ -47,14 +69,14 @@ bool S1Interval::FastContains(double p) const {
 
 bool S1Interval::Contains(double p) const {
   // Works for empty, full, and singleton intervals.
-  DCHECK_LE(fabs(p), M_PI);
+  S2_DCHECK_LE(fabs(p), M_PI);
   if (p == -M_PI) p = M_PI;
   return FastContains(p);
 }
 
 bool S1Interval::InteriorContains(double p) const {
   // Works for empty, full, and singleton intervals.
-  DCHECK_LE(fabs(p), M_PI);
+  S2_DCHECK_LE(fabs(p), M_PI);
   if (p == -M_PI) p = M_PI;
 
   if (is_inverted()) {
@@ -64,7 +86,7 @@ bool S1Interval::InteriorContains(double p) const {
   }
 }
 
-bool S1Interval::Contains(S1Interval const& y) const {
+bool S1Interval::Contains(const S1Interval& y) const {
   // It might be helpful to compare the structure of these tests to
   // the simpler Contains(double) method above.
 
@@ -77,7 +99,7 @@ bool S1Interval::Contains(S1Interval const& y) const {
   }
 }
 
-bool S1Interval::InteriorContains(S1Interval const& y) const {
+bool S1Interval::InteriorContains(const S1Interval& y) const {
   if (is_inverted()) {
     if (!y.is_inverted()) return y.lo() > lo() || y.hi() < hi();
     return (y.lo() > lo() && y.hi() < hi()) || y.is_empty();
@@ -87,7 +109,7 @@ bool S1Interval::InteriorContains(S1Interval const& y) const {
   }
 }
 
-bool S1Interval::Intersects(S1Interval const& y) const {
+bool S1Interval::Intersects(const S1Interval& y) const {
   if (is_empty() || y.is_empty()) return false;
   if (is_inverted()) {
     // Every non-empty inverted interval contains Pi.
@@ -98,7 +120,7 @@ bool S1Interval::Intersects(S1Interval const& y) const {
   }
 }
 
-bool S1Interval::InteriorIntersects(S1Interval const& y) const {
+bool S1Interval::InteriorIntersects(const S1Interval& y) const {
   if (is_empty() || y.is_empty() || lo() == hi()) return false;
   if (is_inverted()) {
     return y.is_inverted() || y.lo() < hi() || y.hi() > lo();
@@ -120,7 +142,7 @@ inline static double PositiveDistance(double a, double b) {
   return (b + M_PI) - (a - M_PI);
 }
 
-double S1Interval::GetDirectedHausdorffDistance(S1Interval const& y) const {
+double S1Interval::GetDirectedHausdorffDistance(const S1Interval& y) const {
   if (y.Contains(*this)) return 0.0;  // this includes the case *this is empty
   if (y.is_empty()) return M_PI;  // maximum possible distance on S1
 
@@ -134,13 +156,13 @@ double S1Interval::GetDirectedHausdorffDistance(S1Interval const& y) const {
         PositiveDistance(y.hi(), hi()) : 0;
     double lo_lo = S1Interval(y_complement_center, y.lo()).Contains(lo()) ?
         PositiveDistance(lo(), y.lo()) : 0;
-    DCHECK(hi_hi > 0 || lo_lo > 0);
+    S2_DCHECK(hi_hi > 0 || lo_lo > 0);
     return max(hi_hi, lo_lo);
   }
 }
 
 void S1Interval::AddPoint(double p) {
-  DCHECK_LE(fabs(p), M_PI);
+  S2_DCHECK_LE(fabs(p), M_PI);
   if (p == -M_PI) p = M_PI;
 
   if (FastContains(p)) return;
@@ -160,9 +182,20 @@ void S1Interval::AddPoint(double p) {
   }
 }
 
+double S1Interval::Project(double p) const {
+  S2_DCHECK(!is_empty());
+  S2_DCHECK_LE(fabs(p), M_PI);
+  if (p == -M_PI) p = M_PI;
+  if (FastContains(p)) return p;
+  // Compute distance from p to each endpoint.
+  double dlo = PositiveDistance(p, lo());
+  double dhi = PositiveDistance(hi(), p);
+  return (dlo < dhi) ? lo() : hi();
+}
+
 S1Interval S1Interval::FromPointPair(double p1, double p2) {
-  DCHECK_LE(fabs(p1), M_PI);
-  DCHECK_LE(fabs(p2), M_PI);
+  S2_DCHECK_LE(fabs(p1), M_PI);
+  S2_DCHECK_LE(fabs(p2), M_PI);
   if (p1 == -M_PI) p1 = M_PI;
   if (p2 == -M_PI) p2 = M_PI;
   if (PositiveDistance(p1, p2) <= M_PI) {
@@ -172,20 +205,25 @@ S1Interval S1Interval::FromPointPair(double p1, double p2) {
   }
 }
 
-S1Interval S1Interval::Expanded(double radius) const {
-  DCHECK_GE(radius, 0);
-  if (is_empty()) return *this;
-
-  // Check whether this interval will be full after expansion, allowing
-  // for a 1-bit rounding error when computing each endpoint.
-  if (GetLength() + 2 * radius >= 2 * M_PI - 1e-15) return Full();
-
-  S1Interval result(remainder(lo() - radius, 2*M_PI), remainder(hi() + radius, 2*M_PI));
+S1Interval S1Interval::Expanded(double margin) const {
+  if (margin >= 0) {
+    if (is_empty()) return *this;
+    // Check whether this interval will be full after expansion, allowing
+    // for a 1-bit rounding error when computing each endpoint.
+    if (GetLength() + 2 * margin + 2 * DBL_EPSILON >= 2 * M_PI) return Full();
+  } else {
+    if (is_full()) return *this;
+    // Check whether this interval will be empty after expansion, allowing
+    // for a 1-bit rounding error when computing each endpoint.
+    if (GetLength() + 2 * margin - 2 * DBL_EPSILON <= 0) return Empty();
+  }
+  S1Interval result(remainder(lo() - margin, 2*M_PI),
+                    remainder(hi() + margin, 2*M_PI));
   if (result.lo() <= -M_PI) result.set_lo(M_PI);
   return result;
 }
 
-S1Interval S1Interval::Union(S1Interval const& y) const {
+S1Interval S1Interval::Union(const S1Interval& y) const {
   // The y.is_full() case is handled correctly in all cases by the code
   // below, but can follow three separate code paths depending on whether
   // this interval is inverted, is non-inverted but contains Pi, or neither.
@@ -216,7 +254,7 @@ S1Interval S1Interval::Union(S1Interval const& y) const {
   }
 }
 
-S1Interval S1Interval::Intersection(S1Interval const& y) const {
+S1Interval S1Interval::Intersection(const S1Interval& y) const {
   // The y.is_full() case is handled correctly in all cases by the code
   // below, but can follow three separate code paths depending on whether
   // this interval is inverted, is non-inverted but contains Pi, or neither.
@@ -238,13 +276,21 @@ S1Interval S1Interval::Intersection(S1Interval const& y) const {
   // contains all of this interval, or the two intervals are disjoint.
 
   if (y.FastContains(lo())) return *this;  // is_empty() okay here
-  DCHECK(!Intersects(y));
+  S2_DCHECK(!Intersects(y));
   return Empty();
 }
 
-bool S1Interval::ApproxEquals(S1Interval const& y, double max_error) const {
-  if (is_empty()) return y.GetLength() <= max_error;
-  if (y.is_empty()) return GetLength() <= max_error;
-  return (fabs(remainder(y.lo() - lo(), 2 * M_PI)) +
-          fabs(remainder(y.hi() - hi(), 2 * M_PI))) <= max_error;
+bool S1Interval::ApproxEquals(const S1Interval& y, double max_error) const {
+  // Full and empty intervals require special cases because the "endpoints"
+  // are considered to be positioned arbitrarily.
+  if (is_empty()) return y.GetLength() <= 2 * max_error;
+  if (y.is_empty()) return GetLength() <= 2 * max_error;
+  if (is_full()) return y.GetLength() >= 2 * (M_PI - max_error);
+  if (y.is_full()) return GetLength() >= 2 * (M_PI - max_error);
+
+  // The purpose of the last test below is to verify that moving the endpoints
+  // does not invert the interval, e.g. [-1e20, 1e20] vs. [1e20, -1e20].
+  return (fabs(remainder(y.lo() - lo(), 2 * M_PI)) <= max_error &&
+          fabs(remainder(y.hi() - hi(), 2 * M_PI)) <= max_error &&
+          fabs(GetLength() - y.GetLength()) <= 2 * max_error);
 }

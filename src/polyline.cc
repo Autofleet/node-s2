@@ -10,10 +10,10 @@
 #include "latlngrect.h"
 #include "point.h"
 #include "polyline.h"
-#include "s2.h"
+// #include "s2.h"
 #include "s1angle.h"
 #include "s2cell.h"
-#include "s2latlngrect.h"
+#include "s2latlng_rect.h"
 #include "s2polyline.h"
 
 #include <string>

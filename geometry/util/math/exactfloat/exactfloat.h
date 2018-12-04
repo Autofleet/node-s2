@@ -1,5 +1,20 @@
 // Copyright 2009 Google Inc. All Rights Reserved.
 //
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+// Author: ericv@google.com (Eric Veach)
+//
 // ExactFloat is a multiple-precision floating point type based on the OpenSSL
 // Bignum library.  It has the same interface as the built-in "float" and
 // "double" types, but only supports the subset of operators and intrinsics
@@ -13,7 +28,7 @@
 // ExactFloat is a subset of the faster and more capable MPFloat class (which
 // is based on the GNU MPFR library).  The main reason to use this class
 // rather than MPFloat is that it is subject to a BSD-style license rather
-// than the much restrictive LGPL license.
+// than the much more restrictive LGPL license.
 //
 // It has the following features:
 //
@@ -32,7 +47,7 @@
 //
 //  - ExactFloat only supports calculations where the result can be
 //    represented exactly.  Therefore it supports intrinsics such as fabs()
-//    but not transcendentals such as sin(), sqrt((double)), etc.
+//    but not transcendentals such as sin(), sqrt(), etc.
 //
 // Syntax Compatibility with "float" and "double"
 // ----------------------------------------------
@@ -51,18 +66,18 @@
 //      if (x) { ... }           // ERROR: use (x != 0) instead
 //
 //  - The glibc floating-point classification macros (fpclassify, isfinite,
-//    isnormal, std::isnan, std::isinf) are not supported.  Instead there are
+//    isnormal, isnan, isinf) are not supported.  Instead there are
 //    zero-argument methods:
 //
 //      ExactFloat x;
-//      if (std::isnan(x)) { ... }  // ERROR: use (x.is_nan()) instead
-//      if (std::isinf(x)) { ... }  // ERROR: use (x.is_inf()) instead
+//      if (isnan(x)) { ... }  // ERROR: use (x.is_nan()) instead
+//      if (isinf(x)) { ... }  // ERROR: use (x.is_inf()) instead
 //
 // Using ExactFloat with Vector3, etc.
 // -----------------------------------
 //
 // ExactFloat can be used with templatized classes such as Vector2 and Vector3
-// (see "util/math/vector3-inl.h"), with the following limitations:
+// (see "util/math/vector.h"), with the following limitations:
 //
 //  - Cast() can be used to convert other vector types to an ExactFloat vector
 //    type, but not the other way around.  This is because there are no
@@ -77,7 +92,7 @@
 //      y = Vector3_d::Cast(x);    // This doesn't.
 //      y = Vector3_d(x[0].ToDouble(), x[1].ToDouble(), x[2].ToDouble()); // OK
 //
-//  - IsNaN() is not supported because it calls std::isnan(), which is defined as a
+//  - IsNaN() is not supported because it calls isnan(), which is defined as a
 //    macro in <math.h> and therefore can't easily be overrided.
 //
 // Precision Semantics
@@ -91,22 +106,21 @@
 // mantissa) is returned by prec().  The precision is increased as necessary
 // so that the result of every operation can be represented exactly.
 
-#ifndef UTIL_MATH_EXACTFLOAT_EXACTFLOAT_H_
-#define UTIL_MATH_EXACTFLOAT_EXACTFLOAT_H_
+#ifndef S2_UTIL_MATH_EXACTFLOAT_EXACTFLOAT_H_
+#define S2_UTIL_MATH_EXACTFLOAT_EXACTFLOAT_H_
 
-#include <math.h>
-#include <limits.h>
+#include <algorithm>
+#include <climits>
+#include <cmath>
+#include <algorithm>
 #include <iostream>
-using std::ostream;
-using std::cout;
-using std::endl;
-
 #include <string>
-using std::string;
 
-#include "base/logging.h"
+#include <openssl/bn.h>
+
 #include "base/integral_types.h"
-#include "openssl/bn.h"
+#include "base/logging.h"
+#include "base/port.h"
 
 class ExactFloat {
  public:
@@ -155,9 +169,10 @@ class ExactFloat {
 
   // Construct an ExactFloat from an "int".  Note that in general, ints are
   // automatically converted to doubles and so would be handled by the
-  // constructor above.  However, the particular argument (0) is ambiguous; the
-  // compiler doesn't know whether to treat it as a "double" or "NULL"
-  // (invoking the const char* constructor below).
+  // constructor above.  However, the particular argument (0) would be
+  // ambiguous; the compiler wouldn't know whether to treat it as a "double" or
+  // "const char*" (since 0 is a valid null pointer constant).  Adding an "int"
+  // constructor solves this problem.
   //
   // We do not provide constructors for "unsigned", "long", "unsigned long",
   // "long long", or "unsigned long long", since these types are not typically
@@ -175,7 +190,7 @@ class ExactFloat {
 
   // The destructor is not virtual for efficiency reasons.  Therefore no
   // subclass should declare additional fields that require destruction.
-  inline ~ExactFloat();
+  inline ~ExactFloat() = default;
 
   /////////////////////////////////////////////////////////////////////
   // Constants
@@ -222,7 +237,7 @@ class ExactFloat {
   // Set the value of the ExactFloat to NaN (Not-a-Number).
   void set_nan();
 
-  // Unfortunately, std::isinf(x), std::isnan(x), isnormal(x), and isfinite(x) are
+  // Unfortunately, isinf(x), isnan(x), isnormal(x), and isfinite(x) are
   // defined as macros in <math.h>.  Therefore we can't easily extend them
   // here.  Instead we provide methods with underscores in their names that do
   // the same thing: x.is_inf(), etc.
@@ -302,7 +317,7 @@ class ExactFloat {
   static int NumSignificantDigitsForPrec(int prec);
 
   // Output the ExactFloat in human-readable format, e.g. for logging.
-  friend ostream& operator<<(ostream& o, ExactFloat const& f) {
+  friend std::ostream& operator<<(std::ostream& o, ExactFloat const& f) {
     return o << f.ToString();
   }
 
@@ -365,6 +380,7 @@ class ExactFloat {
 
   // Absolute value.
   friend ExactFloat fabs(const ExactFloat& a);
+  friend ExactFloat abs(const ExactFloat& a);
 
   // Maximum of two values.
   friend ExactFloat fmax(const ExactFloat& a, const ExactFloat& b);
@@ -470,9 +486,7 @@ class ExactFloat {
   }
 
   // A version of ldexp() where "exp" is a long integer.
-  friend ExactFloat scalbln(const ExactFloat& a, long exp) {
-    return ldexp(a, exp);
-  }
+  friend ExactFloat scalbln(const ExactFloat& a, long exp);
 
   // Convert "a" to a normalized fraction in the range [1,2) times a power of
   // two, and return the exponent value as an integer.  This is equivalent to
@@ -486,6 +500,38 @@ class ExactFloat {
   friend ExactFloat logb(const ExactFloat& a);
 
  protected:
+  // OpenSSL >= 1.1 does not have BN_init, and does not support stack-
+  // allocated BIGNUMS.  We use BN_init when possible, but BN_new otherwise.
+  // If the performance penalty is too high, an object pool can be added
+  // in the future.
+#if defined(OPENSSL_IS_BORINGSSL) || OPENSSL_VERSION_NUMBER < 0x10100000L
+  // BoringSSL and OpenSSL < 1.1 support stack allocated BIGNUMs and BN_init.
+  class BigNum {
+   public:
+    BigNum() { BN_init(&bn_); }
+    // Prevent accidental, expensive, copying.
+    BigNum(const BigNum&) = delete;
+    BigNum& operator=(const BigNum&) = delete;
+    ~BigNum() { BN_free(&bn_); }
+    BIGNUM* get() { return &bn_; }
+    const BIGNUM* get() const { return &bn_; }
+   private:
+    BIGNUM bn_;
+  };
+#else
+  class BigNum {
+   public:
+    BigNum() : bn_(BN_new()) {}
+    BigNum(const BigNum&) = delete;
+    BigNum& operator=(const BigNum&) = delete;
+    ~BigNum() { BN_free(bn_); }
+    BIGNUM* get() { return bn_; }
+    const BIGNUM* get() const { return bn_; }
+   private:
+    BIGNUM* bn_;
+  };
+#endif
+
   // Non-normal numbers are represented using special exponent values and a
   // mantissa of zero.  Do not change these values; methods such as
   // is_normal() make assumptions about their ordering.  Non-normal numbers
@@ -500,7 +546,7 @@ class ExactFloat {
   //  - bn_exp_ is the base-2 exponent applied to bn_.
   int32 sign_;
   int32 bn_exp_;
-  BIGNUM bn_;
+  BigNum bn_;
 
   // A standard IEEE "double" has a 53-bit mantissa consisting of a 52-bit
   // fraction plus an implicit leading "1" bit.
@@ -560,11 +606,6 @@ class ExactFloat {
 // Implementation details follow:
 
 inline ExactFloat::ExactFloat() : sign_(1), bn_exp_(kExpZero) {
-  BN_init(&bn_);
-}
-
-inline ExactFloat::~ExactFloat() {
-  BN_free(&bn_);
 }
 
 inline bool ExactFloat::is_zero() const { return bn_exp_ == kExpZero; }
@@ -602,4 +643,4 @@ inline ExactFloat ExactFloat::CopyWithSign(int sign) const {
   return r;
 }
 
-#endif  // UTIL_MATH_EXACTFLOAT_EXACTFLOAT_H_
+#endif  // S2_UTIL_MATH_EXACTFLOAT_EXACTFLOAT_H_

@@ -1,86 +1,191 @@
 // Copyright 2005 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 
-#ifndef UTIL_GEOMETRY_S2TESTING_H__
-#define UTIL_GEOMETRY_S2TESTING_H__
+// Author: ericv@google.com (Eric Veach)
 
+#ifndef S2_S2TESTING_H_
+#define S2_S2TESTING_H_
+
+#include <algorithm>
+#include <memory>
 #include <string>
-using std::string;
-
+#include <utility>
 #include <vector>
-using std::vector;
 
-#include "s2.h"
-#include "s2cellid.h"
+#include "base/commandlineflags.h"
+#include "base/integral_types.h"
+#include "_fp_contract_off.h"
+#include "r2.h"
+#include "s1angle.h"
+#include "s1chord_angle.h"
+#include "s2cell_id.h"
+#include "third_party/absl/base/macros.h"
+#include "util/math/matrix3x3.h"
 
+class S1Angle;
+class S2Cap;
+class S2CellUnion;
+class S2LatLng;
 class S2LatLngRect;
 class S2Loop;
 class S2Polygon;
 class S2Polyline;
 class S2Region;
-class S2CellUnion;
-class S2Cap;
+
+// You can optionally call S2Testing::rnd.Reset(FLAGS_s2_random_seed) at the
+// start of a test or benchmark to ensure that its results do not depend on
+// which other tests of benchmarks have run previously.  This can help with
+// debugging.
+//
+// This flag currently does *not* affect the initial seed value for
+// S2Testing::rnd.  TODO(user): Fix this.
+DECLARE_int32(s2_random_seed);
 
 // This class defines various static functions that are useful for writing
 // unit tests.
 class S2Testing {
  public:
-  class Random;
+  // Returns a vector of points shaped as a regular polygon with
+  // num_vertices vertices, all on a circle of the specified angular
+  // radius around the center.  The radius is the actual distance from
+  // the center to the circle along the sphere.
+  //
+  // If you want to construct a regular polygon, try this:
+  //   S2Polygon polygon(S2Loop::MakeRegularLoop(center, radius, num_vertices));
+  static std::vector<S2Point> MakeRegularPoints(const S2Point& center,
+                                           S1Angle radius,
+                                           int num_vertices);
 
-  // Given a latitude-longitude coordinate in degrees,
-  // return a newly allocated point.  Example of the input format:
-  //     "-20:150"
-  static S2Point MakePoint(string const& str);
+  // Append the vertices of "loop" to "vertices".
+  static void AppendLoopVertices(const S2Loop& loop,
+                                 std::vector<S2Point>* vertices);
 
-  // Given a string of one or more latitude-longitude coordinates in degrees,
-  // return the minimal bounding S2LatLngRect that contains the coordinates.
-  // Example of the input format:
-  //     "-20:150"                     // one point
-  //     "-20:150, -20:151, -19:150"   // three points
-  static S2LatLngRect MakeLatLngRect(string const& str);
+  // A simple class that generates "Koch snowflake" fractals (see Wikipedia
+  // for an introduction).  There is an option to control the fractal
+  // dimension (between 1.0 and 2.0); values between 1.02 and 1.50 are
+  // reasonable simulations of various coastlines.  The default dimension
+  // (about 1.26) corresponds to the standard Koch snowflake.  (The west coast
+  // of Britain has a fractal dimension of approximately 1.25.)
+  //
+  // The fractal is obtained by starting with an equilateral triangle and
+  // recursively subdividing each edge into four segments of equal length.
+  // Therefore the shape at level "n" consists of 3*(4**n) edges.  Multi-level
+  // fractals are also supported: if you set min_level() to a non-negative
+  // value, then the recursive subdivision has an equal probability of
+  // stopping at any of the levels between the given min and max (inclusive).
+  // This yields a fractal where the perimeter of the original triangle is
+  // approximately equally divided between fractals at the various possible
+  // levels.  If there are k distinct levels {min,..,max}, the expected number
+  // of edges at each level "i" is approximately 3*(4**i)/k.
+  class Fractal {
+   public:
+    // You must call set_max_level() or SetLevelForApproxMaxEdges() before
+    // calling MakeLoop().
+    Fractal();
 
-  // Given a string of latitude-longitude coordinates in degrees,
-  // return a newly allocated loop.  Example of the input format:
-  //     "-20:150, 10:-120, 0.123:-170.652"
-  static S2Loop* MakeLoop(string const& str);
+    // Set the maximum subdivision level for the fractal (see above).
+    // REQUIRES: max_level >= 0
+    void set_max_level(int max_level);
+    int max_level() const { return max_level_; }
 
-  // Similar to MakeLoop(), but returns an S2Polyline rather than an S2Loop.
-  static S2Polyline* MakePolyline(string const& str);
+    // Set the minimum subdivision level for the fractal (see above).  The
+    // default value of -1 causes the min and max levels to be the same.  A
+    // min_level of 0 should be avoided since this creates a significant
+    // chance that none of the three original edges will be subdivided at all.
+    //
+    // DEFAULT: max_level()
+    void set_min_level(int min_level_arg);
+    int min_level() const { return min_level_arg_; }
 
-  // Given a sequence of loops separated by semicolons, return a newly
-  // allocated polygon.  Loops are automatically inverted if necessary so
-  // that they enclose at most half of the unit sphere.
-  static S2Polygon* MakePolygon(string const& str);
+    // Set the min and/or max level to produce approximately the given number
+    // of edges.  (The values are rounded to a nearby value of 3*(4**n).)
+    void SetLevelForApproxMinEdges(int min_edges);
+    void SetLevelForApproxMaxEdges(int max_edges);
 
+    // Set the fractal dimension.  The default value of approximately 1.26
+    // corresponds to the stardard Koch curve.  The value must lie in the
+    // range [1.0, 2.0).
+    //
+    // DEFAULT: log(4) / log(3) ~= 1.26
+    void set_fractal_dimension(double dimension);
+    double fractal_dimension() const { return dimension_; }
 
-  // Returns a newly allocated loop (owned by caller) shaped as a
-  // regular polygon with num_vertices vertices, all on a circle of
-  // radius radius_angle around the center.  The radius is the actual
-  // distance from the center to the circle along the sphere.
-  static S2Loop* MakeRegularLoop(S2Point const& center,
-                                 int num_vertices,
-                                 double radius_angle);
+    // Return a lower bound on ratio (Rmin / R), where "R" is the radius
+    // passed to MakeLoop() and "Rmin" is the minimum distance from the
+    // fractal boundary to its center, where all distances are measured in the
+    // tangent plane at the fractal's center.  This can be used to inscribe
+    // another geometric figure within the fractal without intersection.
+    double min_radius_factor() const;
 
-  // Examples of the input format:
-  //     "10:20, 90:0, 20:30"                                  // one loop
-  //     "10:20, 90:0, 20:30; 5.5:6.5, -90:-180, -15.2:20.3"   // two loops
+    // Return the ratio (Rmax / R), where "R" is the radius passed to
+    // MakeLoop() and "Rmax" is the maximum distance from the fractal boundary
+    // to its center, where all distances are measured in the tangent plane at
+    // the fractal's center.  This can be used to inscribe the fractal within
+    // some other geometric figure without intersection.
+    double max_radius_factor() const;
 
-  // Parse a string in the same format as MakeLatLngRect, and return the
-  // corresponding vector of S2LatLng points.
-  static void ParseLatLngs(string const& str, vector<S2LatLng>* latlngs);
+    // Return a fractal loop centered around the z-axis of the given
+    // coordinate frame, with the first vertex in the direction of the
+    // positive x-axis.  In order to avoid self-intersections, the fractal is
+    // generated by first drawing it in a 2D tangent plane to the unit sphere
+    // (touching at the fractal's center point) and then projecting the edges
+    // onto the sphere.  This has the side effect of shrinking the fractal
+    // slightly compared to its nominal radius.
+    std::unique_ptr<S2Loop> MakeLoop(const Matrix3x3_d& frame,
+                                     S1Angle nominal_radius) const;
 
-  // Parse a string in the same format as MakeLatLngRect, and return the
-  // corresponding vector of S2Point values.
-  static void ParsePoints(string const& str, vector<S2Point>* vertices);
+   private:
+    void ComputeMinLevel();
+    void ComputeOffsets();
+    void GetR2Vertices(std::vector<R2Point>* vertices) const;
+    void GetR2VerticesHelper(const R2Point& v0, const R2Point& v4, int level,
+                             std::vector<R2Point>* vertices) const;
 
-  // Convert a point, lat-lng rect, loop, polyline, or polygon to the string
-  // format above.
-  static string ToString(S2Point const& point);
-  static string ToString(S2LatLngRect const& rect);
-  static string ToString(S2Loop const* loop);
-  static string ToString(S2Polyline const* polyline);
-  static string ToString(S2Polygon const* polygon);
+    int max_level_;
+    int min_level_arg_;  // Value set by user
+    int min_level_;      // Actual min level (depends on max_level_)
+    double dimension_;
+
+    // The ratio of the sub-edge length to the original edge length at each
+    // subdivision step.
+    double edge_fraction_;
+
+    // The distance from the original edge to the middle vertex at each
+    // subdivision step, as a fraction of the original edge length.
+    double offset_fraction_;
+
+    Fractal(const Fractal&) = delete;
+    void operator=(const Fractal&) = delete;
+  };
+
+  // Convert a distance on the Earth's surface to an angle.
+  // Do not use these methods in non-testing code; use s2earth.h instead.
+  static S1Angle MetersToAngle(double meters);
+  static S1Angle KmToAngle(double km);
+
+  // Convert an area in steradians (as returned by the S2 area methods) to
+  // square meters or square kilometers.
+  static double AreaToMeters2(double steradians);
+  static double AreaToKm2(double steradians);
+
+  // The Earth's mean radius in kilometers (according to NASA).
+  static const double kEarthRadiusKm;
 
   // A deterministically-seeded random number generator.
+  class Random;
+
   static Random rnd;
 
   // Return a random unit-length vector.
@@ -88,6 +193,12 @@ class S2Testing {
 
   // Return a right-handed coordinate frame (three orthonormal vectors).
   static void GetRandomFrame(S2Point* x, S2Point* y, S2Point* z);
+  static Matrix3x3_d GetRandomFrame();
+
+  // Given a unit-length z-axis, compute x- and y-axes such that (x,y,z) is a
+  // right-handed coordinate frame (three orthonormal vectors).
+  static void GetRandomFrameAt(const S2Point& z, S2Point* x, S2Point *y);
+  static Matrix3x3_d GetRandomFrameAt(const S2Point& z);
 
   // Return a cap with a random axis such that the log of its area is
   // uniformly distributed between the logs of the two given values.
@@ -96,7 +207,11 @@ class S2Testing {
 
   // Return a point chosen uniformly at random (with respect to area)
   // from the given cap.
-  static S2Point SamplePoint(S2Cap const& cap);
+  static S2Point SamplePoint(const S2Cap& cap);
+
+  // Return a point chosen uniformly at random (with respect to area on the
+  // sphere) from the given latitude-longitude rectangle.
+  static S2Point SamplePoint(const S2LatLngRect& rect);
 
   // Return a random cell id at the given level or at a randomly chosen
   // level.  The distribution is uniform over the space of cell ids,
@@ -104,51 +219,167 @@ class S2Testing {
   static S2CellId GetRandomCellId(int level);
   static S2CellId GetRandomCellId();
 
+  // Return a polygon with the specified center, number of concentric loops
+  // and vertices per loop.
+  static void ConcentricLoopsPolygon(const S2Point& center,
+                                     int num_loops,
+                                     int num_vertices_per_loop,
+                                     S2Polygon* polygon);
+
   // Checks that "covering" completely covers the given region.  If
   // "check_tight" is true, also checks that it does not contain any cells
   // that do not intersect the given region.  ("id" is only used internally.)
-  static void CheckCovering(S2Region const& region,
-                            S2CellUnion const& covering,
+  static void CheckCovering(const S2Region& region,
+                            const S2CellUnion& covering,
                             bool check_tight,
-                            S2CellId const& id = S2CellId());
+                            S2CellId id = S2CellId());
 
-  // Returns the user time consumed by this process, in seconds.
-  static double GetCpuTime();
+ private:
+  // Contains static methods
+  S2Testing() = delete;
+  S2Testing(const S2Testing&) = delete;
+  void operator=(const S2Testing&) = delete;
 };
 
-// Functions in this class return random numbers that are as good as
-// rand() is.  The results will be reproducible as the seed is
-// deterministic.
+// Functions in this class return random numbers that are as good as random()
+// is.  The results are reproducible since the seed is deterministic.  This
+// class is *NOT* thread-safe; it is only intended for testing purposes.
 class S2Testing::Random {
  public:
+  // Initialize using a deterministic seed.
   Random();
+
+  // Reset the generator state using the given seed.
+  void Reset(int32 seed);
+
+  // Return a uniformly distributed 64-bit unsigned integer.
   uint64 Rand64();
+
+  // Return a uniformly distributed 32-bit unsigned integer.
   uint32 Rand32();
+
+  // Return a uniformly distributed "double" in the range [0,1).  Note that
+  // the values returned are all multiples of 2**-53, which means that not all
+  // possible values in this range are returned.
   double RandDouble();
-  int32 Uniform(int32 upper_bound);
+
+  // Return a uniformly distributed integer in the range [0,n).
+  int32 Uniform(int32 n);
+
+  // Return a uniformly distributed "double" in the range [min, limit).
+  double UniformDouble(double min, double limit);
+
+  // A functor-style version of Uniform, so that this class can be used with
+  // STL functions that require a RandomNumberGenerator concept.
   int32 operator() (int32 n) {
     return Uniform(n);
   }
-  bool OneIn(int x);
+
+  // Return true with probability 1 in n.
+  bool OneIn(int32 n);
 
   // Skewed: pick "base" uniformly from range [0,max_log] and then
   // return "base" random bits.  The effect is to pick a number in the
   // range [0,2^max_log-1] with bias towards smaller numbers.
   int32 Skewed(int max_log);
 
-  // PlusOrMinus: return a uniformly distributed value in the range
-  // [value - (value * multiplier), value + (value * multiplier) )
-  // (i.e. inclusive on the lower end and exclusive on the upper end).
-  //
-  // Be careful of floating point rounding, e.g., 1.0/29 is inexactly
-  // represented, and so we get:
-  //
-  // PlusOrMinus(2 * 29, 1.0/29) is
-  // PlusOrMinus(58, 0.0344827849223) which gives
-  // range = static_cast<int32>(1.999999992549) = 1, rand_val \in [0, 2)
-  // and return result \in [57, 59) rather than [56, 60) as probably
-  // intended.  (This holds for IEEE754 floating point.)
-  int32 PlusOrMinus(int32 value, float multiplier);
+ private:
+  // Currently this class is based on random(), therefore it makes no sense to
+  // make a copy.
+  Random(const Random&) = delete;
+  void operator=(const Random&) = delete;
 };
 
-#endif  // UTIL_GEOMETRY_S2TESTING_H__
+// Compare two sets of "closest" items, where "expected" is computed via brute
+// force (i.e., considering every possible candidate) and "actual" is computed
+// using a spatial data structure.  Here "max_size" is a bound on the maximum
+// number of items, "max_distance" is a limit on the distance to any item, and
+// "max_error" is the maximum error allowed when selecting which items are
+// closest (see S2ClosestEdgeQuery::Options::max_error).
+template <typename Id, typename Distance>
+bool CheckDistanceResults(
+    const std::vector<std::pair<Distance, Id>>& expected,
+    const std::vector<std::pair<Distance, Id>>& actual,
+    int max_size, Distance max_distance, typename Distance::Delta max_error);
+
+
+//////////////////// Implementation Details Follow ////////////////////////
+
+
+namespace S2 {
+namespace internal {
+
+// Check that result set "x" contains all the expected results from "y", and
+// does not include any duplicate results.
+template <typename Id, typename Distance>
+bool CheckResultSet(const std::vector<std::pair<Distance, Id>>& x,
+                    const std::vector<std::pair<Distance, Id>>& y,
+                    int max_size, Distance max_distance,
+                    typename Distance::Delta max_error,
+                    typename Distance::Delta max_pruning_error,
+                    const string& label) {
+  using Result = std::pair<Distance, Id>;
+  // Results should be sorted by distance, but not necessarily then by Id.
+  EXPECT_TRUE(std::is_sorted(x.begin(), x.end(),
+                             [](const Result& x, const Result& y) {
+                               return x.first < y.first;
+                             }));
+
+  // Result set X should contain all the items from Y whose distance is less
+  // than "limit" computed below.
+  Distance limit = Distance::Zero();
+  if (x.size() < max_size) {
+    // Result set X was not limited by "max_size", so it should contain all
+    // the items up to "max_distance", except that a few items right near the
+    // distance limit may be missed because the distance measurements used for
+    // pruning S2Cells are not conservative.
+    if (max_distance == Distance::Infinity()) {
+      limit = max_distance;
+    } else {
+      limit = max_distance - max_pruning_error;
+    }
+  } else if (!x.empty()) {
+    // Result set X contains only the closest "max_size" items, to within a
+    // tolerance of "max_error + max_pruning_error".
+    limit = (x.back().first - max_error) - max_pruning_error;
+  }
+
+  bool result = true;
+  for (const auto& yp : y) {
+    // Note that this test also catches duplicate values.
+    int count = std::count_if(x.begin(), x.end(), [&yp](const Result& xp) {
+        return xp.second == yp.second;
+      });
+    if (yp.first < limit && count != 1) {
+      result = false;
+      std::cout << (count > 1 ? "Duplicate" : label) << " distance = "
+                << S1ChordAngle(yp.first) << ", id = " << yp.second
+                << std::endl;
+    }
+  }
+
+  return result;
+}
+
+}  // namespace internal
+}  // namespace S2
+
+template <typename Id, typename Distance>
+bool CheckDistanceResults(
+    const std::vector<std::pair<Distance, Id>>& expected,
+    const std::vector<std::pair<Distance, Id>>& actual,
+    int max_size, Distance max_distance, typename Distance::Delta max_error) {
+  // This is a conservative bound on the error in computing the distance from
+  // the target geometry to an S2Cell.  Such errors can cause candidates to be
+  // pruned from the result set even though they may be slightly closer.
+  static const typename Distance::Delta kMaxPruningError(
+      S1ChordAngle::Radians(1e-15));
+  return (S2::internal::CheckResultSet(
+              actual, expected, max_size, max_distance, max_error,
+              kMaxPruningError, "Missing") & /*not &&*/
+          S2::internal::CheckResultSet(
+              expected, actual, max_size, max_distance, max_error,
+              Distance::Delta::Zero(), "Extra"));
+}
+
+#endif  // S2_S2TESTING_H_

@@ -4,7 +4,7 @@
 #include <node.h>
 #include <nan.h>
 #include "s2cell.h"
-#include "s2cellid.h"
+#include "s2cell_id.h"
 
 class Cell : public node::ObjectWrap {
 public:

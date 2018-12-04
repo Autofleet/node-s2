@@ -3,7 +3,7 @@
 
 #include <node.h>
 #include <nan.h>
-#include "s2cellid.h"
+#include "s2cell_id.h"
 
 class CellId : public node::ObjectWrap {
 public:

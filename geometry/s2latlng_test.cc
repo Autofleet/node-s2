@@ -1,12 +1,36 @@
 // Copyright 2005 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+// Author: ericv@google.com (Eric Veach)
 
 #include "s2latlng.h"
-#include "base/macros.h"
-#include "base/stringprintf.h"
-#include "strings/split.h"
-#include "testing/base/public/gunit.h"
-// #include "testing/base/public/benchmark.h"
+
+#include <cmath>
+#include <cstdio>
+#include <unordered_map>
+
+#include <gtest/gtest.h>
+
+#include "base/logging.h"
+#include "s2pointutil.h"
 #include "s2testing.h"
+#include "third_party/absl/base/macros.h"
+#include "third_party/absl/strings/str_cat.h"
+
+using absl::StrCat;
+using std::fabs;
 
 TEST(S2LatLng, TestBasic) {
   S2LatLng ll_rad = S2LatLng::FromRadians(M_PI_4, M_PI_2);
@@ -54,22 +78,22 @@ TEST(S2LatLng, TestBasic) {
 TEST(S2LatLng, TestConversion) {
   // Test special cases: poles, "date line"
   EXPECT_DOUBLE_EQ(90.0,
-                   S2LatLng(S2LatLng::FromDegrees(90.0, 65.0).ToPoint())
+                   S2LatLng(S2Point(S2LatLng::FromDegrees(90.0, 65.0)))
                    .lat().degrees());
   EXPECT_EQ(-M_PI_2,
-            S2LatLng(S2LatLng::FromRadians(-M_PI_2, 1).ToPoint())
+            S2LatLng(S2Point(S2LatLng::FromRadians(-M_PI_2, 1)))
             .lat().radians());
   EXPECT_DOUBLE_EQ(180.0,
-                   fabs(S2LatLng(S2LatLng::FromDegrees(12.2, 180.0).ToPoint())
+                   fabs(S2LatLng(S2Point(S2LatLng::FromDegrees(12.2, 180.0)))
                         .lng().degrees()));
   EXPECT_EQ(M_PI,
-            fabs(S2LatLng(S2LatLng::FromRadians(0.1, -M_PI).ToPoint())
+            fabs(S2LatLng(S2Point(S2LatLng::FromRadians(0.1, -M_PI)))
                  .lng().radians()));
 
   // Test a bunch of random points.
   for (int i = 0; i < 100000; ++i) {
     S2Point p = S2Testing::RandomPoint();
-    EXPECT_TRUE(S2::ApproxEquals(p, S2LatLng(p).ToPoint())) << p;
+    EXPECT_TRUE(S2::ApproxEquals(p, S2Point(S2LatLng(p)))) << p;
   }
 }
 
@@ -99,23 +123,21 @@ TEST(S2LatLng, TestToString) {
     {0, 0, 0, 0},
     {1.5, 91.7, 1.5, 91.7},
     {9.9, -0.31, 9.9, -0.31},
-    {sqrt(2.), -sqrt(5.), 1.414214, -2.236068},
+    {sqrt(2), -sqrt(5), 1.414214, -2.236068},
     {91.3, 190.4, 90, -169.6},
     {-100, -710, -90, 10},
   };
-  for (int i = 0; i < ARRAYSIZE(values); ++i) {
-    SCOPED_TRACE(StringPrintf("Iteration %d", i));
-    S2LatLng p = S2LatLng::FromDegrees(values[i].lat, values[i].lng);
+  int i = 0;
+  for (const auto& v : values) {
+    SCOPED_TRACE(StrCat("Iteration ", i++));
+    S2LatLng p = S2LatLng::FromDegrees(v.lat, v.lng);
     string output;
     p.ToStringInDegrees(&output);
 
-    const char *ptr = output.c_str();
     double lat, lng;
-    EXPECT_TRUE(SplitOneDoubleToken(&ptr, ",", &lat));
-    ASSERT_TRUE(ptr != NULL);
-    EXPECT_TRUE(SplitOneDoubleToken(&ptr, ",", &lng));
-    EXPECT_NEAR(values[i].expected_lat, lat, 1e-8);
-    EXPECT_NEAR(values[i].expected_lng, lng, 1e-8);
+    ASSERT_EQ(2, std::sscanf(output.c_str(), "%lf,%lf", &lat, &lng));
+    EXPECT_NEAR(v.expected_lat, lat, 1e-8);
+    EXPECT_NEAR(v.expected_lng, lng, 1e-8);
   }
 }
 
@@ -126,11 +148,18 @@ TEST(S2LatLng, TestToStringReturnsString) {
   EXPECT_EQ(S2LatLng::FromDegrees(0, 1).ToStringInDegrees(), s);
 }
 
-
-static void BM_ToPoint(int iters) {
-    S2LatLng ll(S1Angle::E7(0x150bc888), S1Angle::E7(0x5099d63f));
-    for (int i = 0; i < iters; i++) {
-      ll.ToPoint();
-    }
+TEST(S2LatLng, TestHashCode) {
+  std::unordered_map<S2LatLng, int, S2LatLngHash> map;
+  map[S2LatLng::FromDegrees(0, 10)] = 1;
+  map[S2LatLng::FromDegrees(2, 12)] = 2;
+  map[S2LatLng::FromDegrees(5, 15)] = 3;
+  map[S2LatLng::FromDegrees(7, 17)] = 4;
+  map[S2LatLng::FromDegrees(11, 19)] = 5;
+  EXPECT_EQ(map.size(), 5);
+  EXPECT_EQ(1, map[S2LatLng::FromDegrees(0, 10)]);
+  EXPECT_EQ(2, map[S2LatLng::FromDegrees(2, 12)]);
+  EXPECT_EQ(3, map[S2LatLng::FromDegrees(5, 15)]);
+  EXPECT_EQ(4, map[S2LatLng::FromDegrees(7, 17)]);
+  EXPECT_EQ(5, map[S2LatLng::FromDegrees(11, 19)]);
 }
-// BENCHMARK(BM_ToPoint);
+

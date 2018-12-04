@@ -6,7 +6,7 @@
 #include "v8.h"                // for Handle, String, Integer, etc
 
 #include "s2latlng.h"
-#include "s2cellid.h"
+#include "s2cell_id.h"
 #include "s2cell.h"
 #include "s2polygon.h"
 #include "s2loop.h"

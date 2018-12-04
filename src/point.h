@@ -3,7 +3,7 @@
 
 #include <node.h>
 #include <nan.h>
-#include "s2.h"
+// #include "s2.h"
 
 class Point : public node::ObjectWrap {
 public:

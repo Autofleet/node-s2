@@ -1,6 +1,6 @@
-#include "s2.h"
+// #include "s2.h"
 #include "s2cap.h"
-#include "s2cellid.h"
+#include "s2cell_id.h"
 #include "s2latlng.h"
 #include "s2regioncoverer.h"
 #include "strings/strutil.h"

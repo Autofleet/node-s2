@@ -3,7 +3,7 @@
 
 #include <node.h>
 #include <nan.h>
-#include "s2latlngrect.h"
+#include "s2latlng_rect.h"
 
 class LatLngRect : public node::ObjectWrap {
 public:

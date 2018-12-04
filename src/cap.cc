@@ -3,7 +3,7 @@
 #include "node_object_wrap.h"           // for ObjectWrap
 #include "v8.h"                         // for Handle, String, Integer, etc
 
-#include "s2.h"
+// #include "s2.h"
 #include "s2cap.h"
 #include "s2latlngrect.h"
 #include "point.h"
