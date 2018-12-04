@@ -61,7 +61,7 @@ NAN_METHOD(Cap::New) {
           Nan::New(Point::constructor);
         if (constructorHandle->HasInstance(fromObj)) {
             S2Point p = node::ObjectWrap::Unwrap<Point>(fromObj)->get();
-            obj->this_ = S2Cap::FromAxisHeight(p, info[1]->ToNumber()->Value());
+            obj->this_ = S2Cap::FromAxisHeight(p, info[1]->Uint32Value());
         } else {
             Nan::ThrowError("S2Cap requires arguments (S2Point, number)");
             return;
@@ -80,8 +80,8 @@ Handle<Value> Cap::New(S2Cap s2cap) {
     obj->this_ = s2cap;
     Handle<Value> ext = Nan::New<External>(obj);
     Local<FunctionTemplate> constructorHandle = Nan::New(constructor);
-    Handle<Object> handleObject =
-      constructorHandle->GetFunction()->NewInstance(1, &ext);
+    Local<Object> handleObject =
+      Nan::NewInstance(constructorHandle->GetFunction(), 1, &ext).ToLocalChecked();
     return scope.Escape(handleObject);
 }
 

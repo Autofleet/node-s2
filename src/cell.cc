@@ -95,8 +95,8 @@ Handle<Value> Cell::New(S2Cell s2cell) {
     obj->this_ = s2cell;
     Handle<Value> ext = Nan::New<External>(obj);
     Local<FunctionTemplate> constructorHandle = Nan::New(constructor);
-    Handle<Object> handleObject =
-      constructorHandle->GetFunction()->NewInstance(1, &ext);
+    Local<Object> handleObject =
+      Nan::NewInstance(constructorHandle->GetFunction(), 1, &ext).ToLocalChecked();
     return scope.Escape(handleObject);
 }
 
@@ -106,8 +106,8 @@ Handle<Value> Cell::New(S2CellId s2cellid) {
     obj->this_ = S2Cell(s2cellid);
     Handle<Value> ext = Nan::New<External>(obj);
     Local<FunctionTemplate> constructorHandle = Nan::New(constructor);
-    Handle<Object> handleObject =
-      constructorHandle->GetFunction()->NewInstance(1, &ext);
+    Local<Object> handleObject =
+      Nan::NewInstance(constructorHandle->GetFunction(), 1, &ext).ToLocalChecked();
     return scope.Escape(handleObject);
 }
 
@@ -123,7 +123,7 @@ NAN_METHOD(Cell::ExactArea) {
 
 NAN_METHOD(Cell::AverageArea) {
     Cell* obj = ObjectWrap::Unwrap<Cell>(info.This());
-    info.GetReturnValue().Set(Nan::New<Number>(obj->this_.AverageArea(info[0]->ToNumber()->Value())));
+    info.GetReturnValue().Set(Nan::New<Number>(obj->this_.AverageArea(info[0]->Uint32Value())));
 }
 
 NAN_METHOD(Cell::Face) {
@@ -169,5 +169,5 @@ NAN_METHOD(Cell::ToString) {
 
 NAN_METHOD(Cell::GetVertex) {
     Cell* cell = node::ObjectWrap::Unwrap<Cell>(info.This());
-    info.GetReturnValue().Set(Point::New(cell->this_.GetVertex(info[0]->ToNumber()->Value())));
+    info.GetReturnValue().Set(Point::New(cell->this_.GetVertex(info[0]->Uint32Value())));
 }

@@ -11,6 +11,7 @@
 using namespace v8;
 
 Nan::Persistent<FunctionTemplate> LatLng::constructor;
+Nan::AsyncResource *resource;
 
 void LatLng::Init(Handle<Object> target) {
     Local<FunctionTemplate> tpl =
@@ -63,8 +64,8 @@ NAN_METHOD(LatLng::New) {
         if (info[0]->IsNumber() &&
             info[1]->IsNumber()) {
             obj->this_ = S2LatLng::FromDegrees(
-                info[0]->ToNumber()->Value(),
-                info[1]->ToNumber()->Value());
+                info[0]->Uint32Value(),
+                info[1]->Uint32Value());
         }
     } else if (info.Length() == 1) {
         Handle<Object> fromObj = info[0]->ToObject();
@@ -88,8 +89,8 @@ Handle<Value> LatLng::New(S2LatLng s2latlng) {
     obj->this_ = s2latlng;
     Handle<Value> ext = Nan::New<External>(obj);
     Local<FunctionTemplate> constructorHandle = Nan::New(constructor);
-    Handle<Object> handleObject =
-      constructorHandle->GetFunction()->NewInstance(1, &ext);
+    Local<Object> handleObject =
+      Nan::NewInstance(constructorHandle->GetFunction(), 1, &ext).ToLocalChecked();
     return scope.Escape(handleObject);
 }
 

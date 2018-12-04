@@ -80,8 +80,8 @@ Handle<Value> Angle::New(S1Angle s1angle) {
     obj->this_ = s1angle;
     Handle<Value> ext = Nan::New<External>(obj);
     Local<FunctionTemplate> constructorHandle = Nan::New(constructor);
-    Handle<Object> handleObject =
-      constructorHandle->GetFunction()->NewInstance(1, &ext);
+    Local<Object> handleObject =
+      Nan::NewInstance(constructorHandle->GetFunction(), 1, &ext).ToLocalChecked();
     return scope.Escape(handleObject);
 }
 

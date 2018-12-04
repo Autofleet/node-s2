@@ -106,8 +106,8 @@ Handle<Value> Polyline::New(S2Polyline s2cap) {
     obj->this_ = s2cap;
     Handle<Value> ext = Nan::New<External>(obj);
     Local<FunctionTemplate> constructorHandle = Nan::New(constructor);
-    Handle<Object> handleObject =
-      constructorHandle->GetFunction()->NewInstance(1, &ext);
+    Local<Object> handleObject =
+      Nan::NewInstance(constructorHandle->GetFunction(), 1, &ext).ToLocalChecked();
     return scope.Escape(handleObject);
 }
 
@@ -128,13 +128,13 @@ NAN_METHOD(Polyline::GetCentroid) {
 
 NAN_METHOD(Polyline::Interpolate) {
     Polyline* polyline = node::ObjectWrap::Unwrap<Polyline>(info.This());
-    info.GetReturnValue().Set(Point::New(polyline->this_.Interpolate(info[0]->ToNumber()->Value())));
+    info.GetReturnValue().Set(Point::New(polyline->this_.Interpolate(info[0]->Uint32Value())));
 }
 
 NAN_METHOD(Polyline::GetSuffix) {
     Polyline* polyline = node::ObjectWrap::Unwrap<Polyline>(info.This());
     int next_vertex = info[1]->ToInteger()->Value();
-    info.GetReturnValue().Set(Point::New(polyline->this_.GetSuffix(info[0]->ToNumber()->Value(), &next_vertex)));
+    info.GetReturnValue().Set(Point::New(polyline->this_.GetSuffix(info[0]->Uint32Value(), &next_vertex)));
     // TODO: set argv[1] to next_vertex
 }
 
@@ -153,7 +153,7 @@ NAN_METHOD(Polyline::Reverse) {
 NAN_METHOD(Polyline::ApproxEquals) {
     Polyline* polyline = node::ObjectWrap::Unwrap<Polyline>(info.This());
     S2Polyline other = node::ObjectWrap::Unwrap<Polyline>(info[0]->ToObject())->get();
-    double max_error = info[1]->ToNumber()->Value();
+    double max_error = info[1]->Uint32Value();
     info.GetReturnValue().Set(Nan::New<Boolean>(polyline->this_.ApproxEquals(&other, max_error)));
 }
 

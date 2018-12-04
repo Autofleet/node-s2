@@ -99,8 +99,8 @@ Handle<Value> CellId::New(S2CellId s2cellid) {
     obj->this_ = s2cellid;
     Handle<Value> ext = Nan::New<External>(obj);
     Local<FunctionTemplate> constructorHandle = Nan::New(constructor);
-    Handle<Object> handleObject =
-      constructorHandle->GetFunction()->NewInstance(1, &ext);
+    Local<Object> handleObject =
+      Nan::NewInstance(constructorHandle->GetFunction(), 1, &ext).ToLocalChecked();
     return scope.Escape(handleObject);
 }
 
@@ -140,7 +140,7 @@ NAN_METHOD(CellId::ToPoint) {
 NAN_METHOD(CellId::Parent) {
     CellId* obj = node::ObjectWrap::Unwrap<CellId>(info.This());
     if (info.Length() == 1 && info[0]->IsNumber()) {
-        info.GetReturnValue().Set(CellId::New(obj->this_.parent(info[0]->ToNumber()->Value())));
+        info.GetReturnValue().Set(CellId::New(obj->this_.parent(info[0]->Uint32Value())));
     } else {
         info.GetReturnValue().Set(CellId::New(obj->this_.parent()));
     }
@@ -187,7 +187,7 @@ NAN_METHOD(CellId::Child) {
         Nan::ThrowError("(number) required");
         return;
     }
-    info.GetReturnValue().Set(CellId::New(obj->this_.child(info[0]->ToNumber()->Value())));
+    info.GetReturnValue().Set(CellId::New(obj->this_.child(info[0]->Uint32Value())));
 }
 
 NAN_METHOD(CellId::ToLatLng) {

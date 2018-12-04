@@ -59,7 +59,7 @@ NAN_METHOD(Interval::New) {
     Interval* obj = new Interval();
     obj->Wrap(info.This());
 
-    obj->this_ = S1Interval::FromPoint(info[0]->ToNumber()->Value());
+    obj->this_ = S1Interval::FromPoint(info[0]->Uint32Value());
 
     info.GetReturnValue().Set(info.This());
 }
@@ -70,8 +70,8 @@ Handle<Value> Interval::New(S1Interval s1angle) {
     obj->this_ = s1angle;
     Handle<Value> ext = Nan::New<External>(obj);
     Local<FunctionTemplate> constructorHandle = Nan::New(constructor);
-    Handle<Object> handleObject =
-      constructorHandle->GetFunction()->NewInstance(1, &ext);
+    Local<Object> handleObject =
+      Nan::NewInstance(constructorHandle->GetFunction(), 1, &ext).ToLocalChecked();
     return scope.Escape(handleObject);
 }
 
@@ -108,5 +108,5 @@ NAN_METHOD(Interval::Contains) {
     if (!info[0]->IsNumber()) {
         Nan::ThrowError("(number) required");
     }
-    info.GetReturnValue().Set(Nan::New<Boolean>(obj->this_.Contains(info[0]->ToNumber()->Value())));
+    info.GetReturnValue().Set(Nan::New<Boolean>(obj->this_.Contains(info[0]->Uint32Value())));
 }

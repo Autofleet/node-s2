@@ -54,9 +54,9 @@ NAN_METHOD(Point::New) {
     obj->Wrap(info.This());
 
     obj->this_ = S2Point(
-        info[0]->ToNumber()->Value(),
-        info[1]->ToNumber()->Value(),
-        info[2]->ToNumber()->Value());
+        info[0]->Uint32Value(),
+        info[1]->Uint32Value(),
+        info[2]->Uint32Value());
 
     info.GetReturnValue().Set(info.This());
 }
@@ -67,8 +67,8 @@ Handle<Value> Point::New(S2Point s2cell) {
     obj->this_ = s2cell;
     Handle<Value> ext = Nan::New<External>(obj);
     Local<FunctionTemplate> constructorHandle = Nan::New(constructor);
-    Handle<Object> handleObject =
-      constructorHandle->GetFunction()->NewInstance(1, &ext);
+    Local<Object> handleObject =
+      Nan::NewInstance(constructorHandle->GetFunction(), 1, &ext).ToLocalChecked();
     return scope.Escape(handleObject);
 }
 
